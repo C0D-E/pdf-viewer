@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Adobe PDF Embed API Viewer</title>
   <script src="https://documentcloud.adobe.com/view-sdk/viewer.js"></script>
   <style>
@@ -16,16 +16,17 @@
   <script type="text/javascript">
     document.addEventListener("adobe_dc_view_sdk.ready", function () {
       var adobeDCView = new AdobeDC.View({
-        clientId: "30d33487c7c24fa793442d5d281a8dfb",
+        clientId: "30d33487c7c24fa793442d5d281a8dfb",  // Replace this
         divId: "adobe-dc-view"
       });
+
       adobeDCView.previewFile({
         content: {
           location: {
-            url: "https://github.com/C0D-E/pdf-viewer/blob/main/URLA-2019-Borrower-v28.pdf"
+            url: "https://documentcloud.adobe.com/view-sdk-demo/PDFs/Bodea Brochure.pdf"
           }
         },
-        metaData: { fileName: "URLA-2019-Borrower-v28.pdf" }
+        metaData: { fileName: "Bodea Brochure.pdf" }
       }, {
         embedMode: "IN_LINE"
       });
