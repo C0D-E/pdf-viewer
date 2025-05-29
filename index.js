@@ -9,6 +9,12 @@ then your use, modification, or distribution of it requires the prior
 written permission of Adobe.
 */
 
+/* Control the default view mode */
+const viewerConfig = {
+    /* Allowed possible values are "FIT_PAGE", "FIT_WIDTH", "TWO_COLUMN", "TWO_COLUMN_FIT_PAGE" or "". */
+    defaultViewMode: "",
+};
+
 /* Helper function to render the file using PDF Embed API. */
 function previewFile(filePromise, fileName) {
     /* Initialize the AdobeDC View object */
@@ -31,7 +37,7 @@ function previewFile(filePromise, fileName) {
             /* file name */
             fileName: fileName
         }
-    }, {});
+    }, viewerConfig);
 }
 
 /* Helper function to check if selected file is PDF or not. */
