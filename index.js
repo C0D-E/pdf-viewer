@@ -12,7 +12,7 @@ written permission of Adobe.
 /* Control the default view mode */
 const viewerConfig = {
     /* Allowed possible values are "FIT_PAGE", "FIT_WIDTH", "TWO_COLUMN", "TWO_COLUMN_FIT_PAGE" or "". */
-    defaultViewMode: "",
+    defaultViewMode: "FIT_PAGE",
 };
 
 /* Helper function to render the file using PDF Embed API. */
