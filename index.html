@@ -3,35 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Interactive PDF Viewer</title>
-  <script src="https://documentcloud.adobe.com/view-sdk/viewer.js"></script>
-  <style>
-    html, body, #adobe-dc-view {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      width: 100vw;
-      box-sizing: border-box;
-    }
-    #adobe-dc-view {
-      width: 100vw;
-      height: 100vh;
-    }
-    #waiting {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-family: sans-serif;
-      color: #888;
-      font-size: 1.2em;
-    }
-  </style>
-</head>
-<body>
-  <div id="adobe-dc-view"></div>
-  <div id="waiting">Waiting for PDF from app...</div>
-  <script type="text/javascript">
-    // Helper to convert base64 to Uint8Array
+    <script type="text/javascript">
     function base64ToUint8Array(base64) {
       const raw = atob(base64);
       const uint8Array = new Uint8Array(raw.length);
@@ -40,17 +12,14 @@
       }
       return uint8Array;
     }
-
-    // Listen for messages from React Native WebView
-    window.addEventListener('message', function(event) {
+  
+    function handleMessage(event) {
       try {
         var data = JSON.parse(event.data);
         if (data.base64 && data.fileName) {
-          // Remove waiting message
           var waiting = document.getElementById('waiting');
           if (waiting) waiting.style.display = 'none';
-
-          // Wait for Adobe SDK to be ready
+  
           if (window.AdobeDC && window.AdobeDC.View) {
             showPDF(data.base64, data.fileName);
           } else {
@@ -62,8 +31,11 @@
       } catch (e) {
         // Ignore parse errors
       }
-    });
-
+    }
+  
+    window.addEventListener('message', handleMessage, false);
+    document.addEventListener('message', handleMessage, false);
+  
     function showPDF(base64, fileName) {
       var adobeDCView = new AdobeDC.View({
         clientId: "30d33487c7c24fa793442d5d281a8dfb",
@@ -71,7 +43,6 @@
       });
       adobeDCView.previewFile({
         content: {
-          // Pass the PDF as a Uint8Array
           promise: Promise.resolve({
             data: base64ToUint8Array(base64)
           })
