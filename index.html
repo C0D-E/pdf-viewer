@@ -4,56 +4,64 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Interactive PDF Viewer</title>
+
   <script src="https://acrobatservices.adobe.com/view-sdk/viewer.js"></script>
+
   <style>
-    /* Basic styling for the page */
     body, html {
       margin: 0;
       padding: 0;
       height: 100%;
-      font-family: 'Inter', sans-serif; /* Using Inter font */
-      background-color: #f4f7f6; /* Light gray background */
-      display: flex; /* For centering waiting message */
-      align-items: center; /* For centering waiting message */
-      justify-content: center; /* For centering waiting message */
+      font-family: 'Inter', Arial, sans-serif;
+      background-color: #f0f2f5; /* Light background */
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
+
     #adobe-dc-view {
       width: 100%;
       height: 100%;
       border: none;
     }
-    /* Styling for the waiting/error message container */
+
     #message-container {
-      position: fixed; /* Fixed position to overlay content */
+      position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      padding: 20px 30px;
-      background-color: #ffffff; /* White background for the message box */
-      color: #333; /* Dark text color */
-      border-radius: 8px; /* Rounded corners */
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+      padding: 25px 35px;
+      background-color: #ffffff;
+      color: #333333;
+      border-radius: 10px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
       text-align: center;
-      z-index: 1000; /* Ensure it's above other content */
-      display: flex; /* Default to show, will be hidden by JS if PDF loads */
+      z-index: 1000;
+      display: flex;
       flex-direction: column;
       align-items: center;
+      min-width: 250px; /* Ensure it's not too narrow */
     }
+
     #message-container.hidden {
-        display: none; /* Class to hide the message container */
+      display: none;
     }
+
     #message-text {
-      font-size: 18px; /* Slightly larger font size */
-      margin-bottom: 10px;
+      font-size: 1.1em; /* Slightly larger */
+      margin-bottom: 15px;
+      line-height: 1.4;
     }
+
     .spinner {
-      border: 4px solid rgba(0, 0, 0, 0.1);
-      width: 36px;
-      height: 36px;
+      border: 5px solid rgba(0, 0, 0, 0.1);
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
-      border-left-color: #09f; /* Blue spinner color */
-      animation: spin 1s ease infinite;
+      border-left-color: #007bff; /* Adobe blue or similar */
+      animation: spin 1s ease-in-out infinite;
     }
+
     @keyframes spin {
       0% {
         transform: rotate(0deg);
@@ -71,14 +79,15 @@
 
   <div id="message-container">
     <div id="message-text">Loading PDF...</div>
-    <div class="spinner"></div> </div>
+    <div class="spinner"></div>
+  </div>
 
   <div id="adobe-dc-view"></div>
 
   <script type="text/javascript">
     // Function to convert Base64 string to Uint8Array
     function base64ToUint8Array(base64) {
-      const raw = atob(base64); // Decode Base64 string
+      const raw = atob(base64); // Decodes a Base64 string
       const uint8Array = new Uint8Array(raw.length);
       for (let i = 0; i < raw.length; ++i) {
         uint8Array[i] = raw.charCodeAt(i);
@@ -86,47 +95,64 @@
       return uint8Array;
     }
 
-    // Function to handle messages from the parent window (e.g., Android WebView)
+    // Function to handle messages from the parent window (e.g., React Native WebView)
     function handleMessage(event) {
       const messageContainer = document.getElementById('message-container');
       const messageText = document.getElementById('message-text');
       const spinner = messageContainer.querySelector('.spinner');
 
+      console.log("Received event:", event); // Log the entire event to inspect its origin
+
+      // SECURITY: Check the origin of the message
+      // Replace "YOUR_EXPECTED_ORIGIN" with the actual origin your WebView uses.
+      // For GitHub Pages, this would be "https://your-username.github.io".
+      // For local files in WebView, it might be "null" (string) or a custom scheme
+      // if you used loadDataWithBaseURL in native Android/iOS.
+      // Example: const expectedOrigin = "https://your-username.github.io";
+      // if (event.origin !== expectedOrigin) {
+      //   console.warn("Message from unexpected origin:", event.origin, "Expected:", expectedOrigin);
+      //   if (messageText) messageText.textContent = "Error: Message from untrusted source.";
+      //   if (spinner) spinner.style.display = 'none';
+      //   if (messageContainer) messageContainer.classList.remove('hidden');
+      //   return; // Stop processing if the origin is not trusted
+      // }
+
       try {
         const data = JSON.parse(event.data);
+        console.log("Parsed data from message:", data);
 
         if (data.base64 && data.fileName) {
-          // Hide the loading/message container
+          // Hide the loading/message container as we have the data
           if (messageContainer) messageContainer.classList.add('hidden');
 
           // Check if Adobe DC View SDK is ready
           if (window.AdobeDC && window.AdobeDC.View) {
+            console.log("AdobeDC SDK already available. Showing PDF.");
             showPDF(data.base64, data.fileName);
           } else {
             // If SDK is not ready, wait for the 'adobe_dc_view_sdk.ready' event
+            console.log("AdobeDC SDK not ready yet. Adding event listener.");
             document.addEventListener("adobe_dc_view_sdk.ready", function () {
+              console.log("AdobeDC SDK 'ready' event fired. Showing PDF.");
               showPDF(data.base64, data.fileName);
             });
           }
         } else {
-          // Handle cases where data might be missing expected properties
           console.warn("Received message with incomplete data:", data);
-          if (messageText) messageText.textContent = "Received incomplete data to load PDF.";
+          if (messageText) messageText.textContent = "Error: Incomplete data received to load PDF.";
           if (spinner) spinner.style.display = 'none';
           if (messageContainer) messageContainer.classList.remove('hidden');
         }
       } catch (e) {
-        // This block executes if JSON.parse fails or any other error occurs in the try block
-        console.error("Error parsing message or processing PDF data:", e);
-
+        console.error("Error processing message or PDF data:", e);
         if (messageText) {
-          messageText.textContent = "Error: Could not load PDF. " + e.message;
+          messageText.textContent = "Error: Could not load PDF. " + (e.message || "Unknown error");
         }
         if (spinner) {
-          spinner.style.display = 'none';
+          spinner.style.display = 'none'; // Hide spinner on error
         }
         if (messageContainer) {
-          messageContainer.classList.remove('hidden');
+          messageContainer.classList.remove('hidden'); // Ensure message container is visible
         }
       }
     }
@@ -136,33 +162,67 @@
 
     // Function to display the PDF using Adobe DC View SDK
     function showPDF(base64, fileName) {
-      const adobeDCView = new AdobeDC.View({
-        clientId: "30d33487c7c24fa793442d5d281a8dfb",
-        divId: "adobe-dc-view"
-      });
-
-      adobeDCView.previewFile({
-        content: {
-          promise: Promise.resolve(base64ToUint8Array(base64).buffer)
-        },
-        metaData: {
-          fileName: fileName
-        }
-      }, {
-        embedMode: "FULL_WINDOW",
-        enableFormFilling: true,
-        showDownloadPDF: true,
-        showPrintPDF: true
-      });
-    }
-
-    if (window.AdobeDC && window.AdobeDC.View) {
-        console.log("Adobe DC SDK already loaded on initial check.");
-    } else {
-        document.addEventListener("adobe_dc_view_sdk.ready", function () {
-            console.log("Adobe DC SDK ready event fired.");
+      console.log("Attempting to show PDF:", fileName);
+      try {
+        // VERY IMPORTANT: Replace "YOUR_ADOBE_CLIENT_ID" with your actual client ID from Adobe.
+        // You need to register your GitHub Pages domain (e.g., "your-username.github.io") with Adobe.
+        const adobeDCView = new AdobeDC.View({
+          clientId: "30d33487c7c24fa793442d5d281a8dfb",
+          divId: "adobe-dc-view"
         });
+
+        adobeDCView.previewFile({
+          content: {
+            // The promise should resolve with an object containing the ArrayBuffer data
+            promise: Promise.resolve({ data: base64ToUint8Array(base64).buffer })
+          },
+          metaData: {
+            fileName: fileName
+          }
+        }, {
+          // Viewer configuration options
+          embedMode: "FULL_WINDOW", // Options: "FULL_WINDOW", "SIZED_CONTAINER", "IN_LINE"
+          // defaultViewMode: "FIT_WIDTH", // Options: "FIT_WIDTH", "FIT_PAGE"
+          showAnnotationTools: true,
+          enableFormFilling: true,
+          showDownloadPDF: true,
+          showPrintPDF: true,
+          showLeftHandPanel: true, // Show thumbnails, bookmarks, etc.
+          // For more options, see Adobe DC View SDK documentation
+        });
+        console.log("AdobeDC.View.previewFile called for:", fileName);
+      } catch (sdkError) {
+        console.error("Error initializing or showing PDF with Adobe SDK:", sdkError);
+        const messageContainer = document.getElementById('message-container');
+        const messageText = document.getElementById('message-text');
+        const spinner = messageContainer.querySelector('.spinner');
+        if (messageText) messageText.textContent = "Error displaying PDF: " + (sdkError.message || "SDK Error");
+        if (spinner) spinner.style.display = 'none';
+        if (messageContainer) messageContainer.classList.remove('hidden');
+      }
     }
+
+    // Initial check and log for Adobe SDK (good for debugging SDK loading itself)
+    if (window.AdobeDC && window.AdobeDC.View) {
+      console.log("Adobe DC SDK was already loaded on page initialization.");
+    } else {
+      document.addEventListener("adobe_dc_view_sdk.ready", function () {
+        console.log("Adobe DC SDK 'ready' event fired globally on page initialization (if SDK wasn't ready before).");
+      });
+    }
+
+    // Fallback if no message is received after a while (optional)
+    setTimeout(() => {
+       const messageContainer = document.getElementById('message-container');
+       // Check if the message container is still visible and showing the initial loading message
+       if (!messageContainer.classList.contains('hidden') && 
+           document.getElementById('message-text').textContent === 'Loading PDF...') {
+         document.getElementById('message-text').textContent = 'No PDF data received. Waiting for app...';
+         // Optionally hide the spinner if it implies active loading that isn't happening
+         // document.querySelector('#message-container .spinner').style.display = 'none';
+       }
+     }, 15000); // 15 seconds
+
   </script>
 </body>
 </html>
