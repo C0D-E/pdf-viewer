@@ -78,7 +78,7 @@
 <body>
 
   <div id="message-container">
-    <div id="message-text">Loading PDF...</div>
+    <div id="message-text">Initializing Viewer...</div>
     <div class="spinner"></div>
   </div>
 
@@ -100,59 +100,38 @@
       const messageContainer = document.getElementById('message-container');
       const messageText = document.getElementById('message-text');
       const spinner = messageContainer.querySelector('.spinner');
-
-      console.log("Received event:", event); // Log the entire event to inspect its origin
-
-      // SECURITY: Check the origin of the message
-      // Replace "YOUR_EXPECTED_ORIGIN" with the actual origin your WebView uses.
-      // For GitHub Pages, this would be "https://your-username.github.io".
-      // For local files in WebView, it might be "null" (string) or a custom scheme
-      // if you used loadDataWithBaseURL in native Android/iOS.
-      // Example: const expectedOrigin = "https://your-username.github.io";
-      // if (event.origin !== expectedOrigin) {
-      //   console.warn("Message from unexpected origin:", event.origin, "Expected:", expectedOrigin);
-      //   if (messageText) messageText.textContent = "Error: Message from untrusted source.";
-      //   if (spinner) spinner.style.display = 'none';
-      //   if (messageContainer) messageContainer.classList.remove('hidden');
-      //   return; // Stop processing if the origin is not trusted
-      // }
-
       try {
         const data = JSON.parse(event.data);
         console.log("Parsed data from message:", data);
 
         if (data.base64 && data.fileName) {
-          // Hide the loading/message container as we have the data
-          if (messageContainer) messageContainer.classList.add('hidden');
+          if (messageText) messageText.textContent = 'Loading PDF...'; // Update message
+          if (spinner) spinner.style.display = 'block'; // Ensure spinner is visible
+          if (messageContainer) messageContainer.classList.remove('hidden'); // Ensure it's visible
 
           // Check if Adobe DC View SDK is ready
           if (window.AdobeDC && window.AdobeDC.View) {
-            console.log("AdobeDC SDK already available. Showing PDF.");
             showPDF(data.base64, data.fileName);
           } else {
-            // If SDK is not ready, wait for the 'adobe_dc_view_sdk.ready' event
-            console.log("AdobeDC SDK not ready yet. Adding event listener.");
             document.addEventListener("adobe_dc_view_sdk.ready", function () {
-              console.log("AdobeDC SDK 'ready' event fired. Showing PDF.");
               showPDF(data.base64, data.fileName);
             });
           }
         } else {
-          console.warn("Received message with incomplete data:", data);
-          if (messageText) messageText.textContent = "Error: Incomplete data received to load PDF.";
-          if (spinner) spinner.style.display = 'none';
-          if (messageContainer) messageContainer.classList.remove('hidden');
+          // This case handles if the message isn't the PDF data,
+          // useful if other messages are sent from RN to WebView.
+          // For now, we'll assume any other message is not for PDF loading.
+          console.warn("Received message without PDF data:", data);
         }
       } catch (e) {
-        console.error("Error processing message or PDF data:", e);
-        if (messageText) {
-          messageText.textContent = "Error: Could not load PDF. " + (e.message || "Unknown error");
-        }
-        if (spinner) {
-          spinner.style.display = 'none'; // Hide spinner on error
-        }
-        if (messageContainer) {
-          messageContainer.classList.remove('hidden'); // Ensure message container is visible
+        // This catch is for errors parsing event.data or if data isn't an object with base64/fileName
+        if (typeof event.data === 'string' && event.data !== 'ready') { // Avoid erroring on our own "ready" string if it bubbles back
+            console.error("Error processing received message:", e, "Raw data:", event.data);
+            if (messageText) messageText.textContent = "Error: Invalid data from app. " + (e.message || "");
+            if (spinner) spinner.style.display = 'none';
+            if (messageContainer) messageContainer.classList.remove('hidden');
+        } else if (typeof event.data !== 'string') { // Catch other parsing errors not related to 'ready'
+             console.error("Error processing received message:", e, "Raw data:", event.data);
         }
       }
     }
@@ -162,10 +141,9 @@
 
     // Function to display the PDF using Adobe DC View SDK
     function showPDF(base64, fileName) {
+      const messageContainer = document.getElementById('message-container');
       console.log("Attempting to show PDF:", fileName);
       try {
-        // VERY IMPORTANT: Replace "YOUR_ADOBE_CLIENT_ID" with your actual client ID from Adobe.
-        // You need to register your GitHub Pages domain (e.g., "your-username.github.io") with Adobe.
         const adobeDCView = new AdobeDC.View({
           clientId: "30d33487c7c24fa793442d5d281a8dfb",
           divId: "adobe-dc-view"
@@ -173,27 +151,26 @@
 
         adobeDCView.previewFile({
           content: {
-            // The promise should resolve with an object containing the ArrayBuffer data
             promise: Promise.resolve({ data: base64ToUint8Array(base64).buffer })
           },
-          metaData: {
-            fileName: fileName
-          }
+          metaData: { fileName: fileName }
         }, {
-          // Viewer configuration options
-          embedMode: "FULL_WINDOW", // Options: "FULL_WINDOW", "SIZED_CONTAINER", "IN_LINE"
-          // defaultViewMode: "FIT_WIDTH", // Options: "FIT_WIDTH", "FIT_PAGE"
+          embedMode: "FULL_WINDOW",
           showAnnotationTools: true,
           enableFormFilling: true,
           showDownloadPDF: true,
           showPrintPDF: true,
-          showLeftHandPanel: true, // Show thumbnails, bookmarks, etc.
-          // For more options, see Adobe DC View SDK documentation
+          showLeftHandPanel: true,
         });
+        // PDF viewer will take over, hide message container after a slight delay
+        // to allow viewer to initialize its own UI.
+        setTimeout(() => {
+            if (messageContainer) messageContainer.classList.add('hidden');
+        }, 500); // Adjust delay if needed
         console.log("AdobeDC.View.previewFile called for:", fileName);
+
       } catch (sdkError) {
         console.error("Error initializing or showing PDF with Adobe SDK:", sdkError);
-        const messageContainer = document.getElementById('message-container');
         const messageText = document.getElementById('message-text');
         const spinner = messageContainer.querySelector('.spinner');
         if (messageText) messageText.textContent = "Error displaying PDF: " + (sdkError.message || "SDK Error");
@@ -202,26 +179,40 @@
       }
     }
 
-    // Initial check and log for Adobe SDK (good for debugging SDK loading itself)
+    // Initial check and log for Adobe SDK
     if (window.AdobeDC && window.AdobeDC.View) {
       console.log("Adobe DC SDK was already loaded on page initialization.");
     } else {
       document.addEventListener("adobe_dc_view_sdk.ready", function () {
-        console.log("Adobe DC SDK 'ready' event fired globally on page initialization (if SDK wasn't ready before).");
+        console.log("Adobe DC SDK 'ready' event fired globally.");
       });
     }
 
-    // Fallback if no message is received after a while (optional)
-    setTimeout(() => {
-       const messageContainer = document.getElementById('message-container');
-       // Check if the message container is still visible and showing the initial loading message
-       if (!messageContainer.classList.contains('hidden') && 
-           document.getElementById('message-text').textContent === 'Loading PDF...') {
-         document.getElementById('message-text').textContent = 'No PDF data received. Waiting for app...';
-         // Optionally hide the spinner if it implies active loading that isn't happening
-         // document.querySelector('#message-container .spinner').style.display = 'none';
-       }
-     }, 15000); // 15 seconds
+    // --- NEW CODE: Send 'ready' message to React Native WebView ---
+    // This signals that the HTML page's JavaScript is loaded and the message listener is active.
+    // It's best to do this after essential setup and DOM is likely ready.
+    function sendReadyMessage() {
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+            console.log("HTML Page: Sending 'ready' message to React Native.");
+            window.ReactNativeWebView.postMessage('ready');
+        } else {
+            // Fallback or retry if ReactNativeWebView is not immediately available
+            // This might happen if the script runs extremely fast.
+            console.warn("HTML Page: ReactNativeWebView.postMessage not available yet. Will retry shortly.");
+            setTimeout(sendReadyMessage, 200); // Retry after a short delay
+        }
+    }
+
+    // Send the ready message.
+    // Using DOMContentLoaded to ensure the basic HTML structure is parsed,
+    // though for window.ReactNativeWebView it's often available as script executes.
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", sendReadyMessage);
+    } else {
+        // DOMContentLoaded has already fired
+        sendReadyMessage();
+    }
+    // --- END OF NEW CODE ---
 
   </script>
 </body>
