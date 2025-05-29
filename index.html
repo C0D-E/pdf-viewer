@@ -1,219 +1,44 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Interactive PDF Viewer</title>
-
-  <script src="https://acrobatservices.adobe.com/view-sdk/viewer.js"></script>
-
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: 'Inter', Arial, sans-serif;
-      background-color: #f0f2f5; /* Light background */
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    #adobe-dc-view {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-
-    #message-container {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      padding: 25px 35px;
-      background-color: #ffffff;
-      color: #333333;
-      border-radius: 10px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-      text-align: center;
-      z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-width: 250px; /* Ensure it's not too narrow */
-    }
-
-    #message-container.hidden {
-      display: none;
-    }
-
-    #message-text {
-      font-size: 1.1em; /* Slightly larger */
-      margin-bottom: 15px;
-      line-height: 1.4;
-    }
-
-    .spinner {
-      border: 5px solid rgba(0, 0, 0, 0.1);
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      border-left-color: #007bff; /* Adobe blue or similar */
-      animation: spin 1s ease-in-out infinite;
-    }
-
-    @keyframes spin {
-      0% {
-        transform: rotate(0deg);
-      }
-      100% {
-        transform: rotate(360deg);
-      }
-    }
-  </style>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <title>Adobe PDF Viewer</title>
+    <meta charset="utf-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    <meta id="viewport" name="viewport" content="width=device-width, initial-scale=1"/>
+    <script type="text/javascript" src="file:///android_asset/index.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* To prevent scrollbars if adobe-dc-view takes full space */
+        }
+        #main-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        #status-message {
+            padding: 10px;
+            background-color: #f0f0f0;
+            text-align: center;
+            font-family: sans-serif;
+            font-size: 0.9em;
+            border-bottom: 1px solid #ccc;
+        }
+        #adobe-dc-view {
+            flex-grow: 1; /* Takes up remaining space */
+            width: 100%;
+            height: 100%; /* Fallback or if not in flex container */
+        }
+    </style>
 </head>
 <body>
-
-  <div id="message-container">
-    <div id="message-text">Initializing Viewer...</div>
-    <div class="spinner"></div>
-  </div>
-
-  <div id="adobe-dc-view"></div>
-
-  <script type="text/javascript">
-    // Function to convert Base64 string to Uint8Array
-    function base64ToUint8Array(base64) {
-      const raw = atob(base64); // Decodes a Base64 string
-      const uint8Array = new Uint8Array(raw.length);
-      for (let i = 0; i < raw.length; ++i) {
-        uint8Array[i] = raw.charCodeAt(i);
-      }
-      return uint8Array;
-    }
-
-    // Function to handle messages from the parent window (e.g., React Native WebView)
-    function handleMessage(event) {
-      const messageContainer = document.getElementById('message-container');
-      const messageText = document.getElementById('message-text');
-      const spinner = messageContainer.querySelector('.spinner');
-      try {
-        const data = JSON.parse(event.data);
-        console.log("Parsed data from message:", data);
-
-        if (data.base64 && data.fileName) {
-          if (messageText) messageText.textContent = 'Loading PDF...'; // Update message
-          if (spinner) spinner.style.display = 'block'; // Ensure spinner is visible
-          if (messageContainer) messageContainer.classList.remove('hidden'); // Ensure it's visible
-
-          // Check if Adobe DC View SDK is ready
-          if (window.AdobeDC && window.AdobeDC.View) {
-            showPDF(data.base64, data.fileName);
-          } else {
-            document.addEventListener("adobe_dc_view_sdk.ready", function () {
-              showPDF(data.base64, data.fileName);
-            });
-          }
-        } else {
-          // This case handles if the message isn't the PDF data,
-          // useful if other messages are sent from RN to WebView.
-          // For now, we'll assume any other message is not for PDF loading.
-          console.warn("Received message without PDF data:", data);
-        }
-      } catch (e) {
-        // This catch is for errors parsing event.data or if data isn't an object with base64/fileName
-        if (typeof event.data === 'string' && event.data !== 'ready') { // Avoid erroring on our own "ready" string if it bubbles back
-            console.error("Error processing received message:", e, "Raw data:", event.data);
-            if (messageText) messageText.textContent = "Error: Invalid data from app. " + (e.message || "");
-            if (spinner) spinner.style.display = 'none';
-            if (messageContainer) messageContainer.classList.remove('hidden');
-        } else if (typeof event.data !== 'string') { // Catch other parsing errors not related to 'ready'
-             console.error("Error processing received message:", e, "Raw data:", event.data);
-        }
-      }
-    }
-
-    // Add event listener for messages from the parent window
-    window.addEventListener('message', handleMessage, false);
-
-    // Function to display the PDF using Adobe DC View SDK
-    function showPDF(base64, fileName) {
-      const messageContainer = document.getElementById('message-container');
-      console.log("Attempting to show PDF:", fileName);
-      try {
-        const adobeDCView = new AdobeDC.View({
-          clientId: "30d33487c7c24fa793442d5d281a8dfb",
-          divId: "adobe-dc-view"
-        });
-
-        adobeDCView.previewFile({
-          content: {
-            promise: Promise.resolve({ data: base64ToUint8Array(base64).buffer })
-          },
-          metaData: { fileName: fileName }
-        }, {
-          embedMode: "FULL_WINDOW",
-          showAnnotationTools: true,
-          enableFormFilling: true,
-          showDownloadPDF: true,
-          showPrintPDF: true,
-          showLeftHandPanel: true,
-        });
-        // PDF viewer will take over, hide message container after a slight delay
-        // to allow viewer to initialize its own UI.
-        setTimeout(() => {
-            if (messageContainer) messageContainer.classList.add('hidden');
-        }, 500); // Adjust delay if needed
-        console.log("AdobeDC.View.previewFile called for:", fileName);
-
-      } catch (sdkError) {
-        console.error("Error initializing or showing PDF with Adobe SDK:", sdkError);
-        const messageText = document.getElementById('message-text');
-        const spinner = messageContainer.querySelector('.spinner');
-        if (messageText) messageText.textContent = "Error displaying PDF: " + (sdkError.message || "SDK Error");
-        if (spinner) spinner.style.display = 'none';
-        if (messageContainer) messageContainer.classList.remove('hidden');
-      }
-    }
-
-    // Initial check and log for Adobe SDK
-    if (window.AdobeDC && window.AdobeDC.View) {
-      console.log("Adobe DC SDK was already loaded on page initialization.");
-    } else {
-      document.addEventListener("adobe_dc_view_sdk.ready", function () {
-        console.log("Adobe DC SDK 'ready' event fired globally.");
-      });
-    }
-
-    // --- NEW CODE: Send 'ready' message to React Native WebView ---
-    // This signals that the HTML page's JavaScript is loaded and the message listener is active.
-    // It's best to do this after essential setup and DOM is likely ready.
-    function sendReadyMessage() {
-        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-            console.log("HTML Page: Sending 'ready' message to React Native.");
-            window.ReactNativeWebView.postMessage('ready');
-        } else {
-            // Fallback or retry if ReactNativeWebView is not immediately available
-            // This might happen if the script runs extremely fast.
-            console.warn("HTML Page: ReactNativeWebView.postMessage not available yet. Will retry shortly.");
-            setTimeout(sendReadyMessage, 200); // Retry after a short delay
-        }
-    }
-
-    // Send the ready message.
-    // Using DOMContentLoaded to ensure the basic HTML structure is parsed,
-    // though for window.ReactNativeWebView it's often available as script executes.
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", sendReadyMessage);
-    } else {
-        // DOMContentLoaded has already fired
-        sendReadyMessage();
-    }
-    // --- END OF NEW CODE ---
-
-  </script>
+    <div id="main-container">
+        <div id="status-message">Please use the app button to select a PDF file to view.</div>
+        <div id="adobe-dc-view"></div>
+    </div>
+    <script type="text/javascript" src="https://acrobatservices.adobe.com/view-sdk/viewer.js"></script>
 </body>
 </html>
