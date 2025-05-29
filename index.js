@@ -14,7 +14,7 @@ function previewFile(filePromise, fileName) {
     /* Initialize the AdobeDC View object */
     var adobeDCView = new AdobeDC.View({
         /* Pass your registered client id */
-        clientId: "<30d33487c7c24fa793442d5d281a8dfb>",
+        clientId: "30d33487c7c24fa793442d5d281a8dfb",
         /* Pass the div id in which PDF should be rendered */
         divId: "adobe-dc-view",
     });
